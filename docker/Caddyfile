@@ -1,0 +1,29 @@
+# Caddyfile - 自动 HTTPS + 反向代理
+# 放在服务器上，caddy 会自动申请/续签 Let's Encrypt 证书
+
+# 默认路由：所有域名走 Go 服务
+{
+    # 全局配置
+    admin off
+    email admin@example.com  # 改成你的邮箱，用于 Let's Encrypt 通知
+}
+
+# 通配符：所有域名走 Go 后端
+# Caddy 会自动为每个域名申请 HTTPS 证书
+:443 {
+    # 自动 HTTPS
+    tls internal
+
+    # 反向代理到 Go 服务
+    reverse_proxy localhost:8080 {
+        # 传递真实 IP
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+
+# HTTP → HTTPS 重定向
+:80 {
+    redir https://{host}{uri} permanent
+}

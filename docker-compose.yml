@@ -1,0 +1,55 @@
+# Docker Compose 一键启动依赖服务
+# Go 服务本身建议直接编译运行，不走容器（更轻量）
+
+services:
+  # ClickHouse - 访问日志存储
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    container_name: platform-clickhouse
+    ports:
+      - "8123:8123"   # HTTP 接口
+      - "9000:9000"   # Native 协议
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: platform
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+
+  # Redis - 访问日志缓冲
+  redis:
+    image: redis:7-alpine
+    container_name: platform-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+
+  # Caddy - 自动 HTTPS + 反向代理
+  caddy:
+    image: caddy:2-alpine
+    container_name: platform-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+    depends_on:
+      - clickhouse
+      - redis
+
+volumes:
+  clickhouse-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
