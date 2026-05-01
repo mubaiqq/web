@@ -30,6 +30,15 @@ PORT=8080 ./bin/server
 # 访问 http://localhost:8080
 ```
 
+## 默认管理员
+
+首次运行自动创建默认管理员账号：
+
+- **用户名**：`admin`
+- **密码**：`admin123`
+
+管理员登录后自动跳转到管理后台 `/admin`。
+
 ## 项目结构
 
 ```
@@ -40,9 +49,14 @@ domain-platform/
 │   ├── register.html           # 注册
 │   ├── login.html              # 登录
 │   ├── dashboard.html          # 用户控制台
+│   ├── user_settings.html      # 用户设置（修改密码）
 │   ├── 404.html                # 域名未绑定
-│   └── site.html               # 绑定域名展示页
-├── static/css/style.css        # 备用样式（当前用 Tailwind CDN）
+│   ├── 403.html                # 权限不足
+│   ├── site.html               # 绑定域名展示页
+│   ├── admin_dashboard.html    # 管理员仪表盘
+│   ├── admin_domains.html      # 域名管理
+│   ├── admin_users.html        # 用户管理
+│   └── admin_settings.html     # 站点设置
 ├── data/platform.db            # SQLite 数据库（自动生成）
 ├── docs/                       # 项目文档
 │   ├── FEATURES.md             # 功能清单
@@ -69,9 +83,9 @@ curl -X POST http://localhost:8080/login \
   -d "username=test&password=123456"
 ```
 
-## 当前状态
+## 功能状态
 
-**v0.1.0 — 基础骨架已完成**
+### v0.1.0 — 基础骨架 ✅
 
 - [x] 用户注册/登录/退出
 - [x] 首页域名查询
@@ -80,6 +94,21 @@ curl -X POST http://localhost:8080/login \
 - [x] 访问日志记录（SQLite 简易版）
 - [x] Tailwind CSS + Lucide Icons UI
 - [x] 毛玻璃效果 + 渐变主题
+
+### v0.2.0 — 管理员后台 ✅
+
+- [x] 管理员角色区分（role 字段：admin / user）
+- [x] 管理员登录验证中间件
+- [x] 管理员后台布局（独立侧边栏）
+- [x] 管理仪表盘（用户数、域名数、活跃域名、总访问量、今日访问）
+- [x] 域名管理（列表、搜索、筛选、添加、编辑、删除、启用/禁用）
+- [x] 用户管理（列表、搜索、添加、编辑、删除、重置密码）
+- [x] 站点设置（站点标题、页脚文字、背景图片、统计代码）
+- [x] 管理员密码修改
+- [x] 用户个人设置页（修改密码）
+- [x] 403 权限不足页面
+- [x] 域名路由支持 301/302 跳转类型
+- [x] 默认管理员自动创建
 
 ## 下一步
 

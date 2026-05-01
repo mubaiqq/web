@@ -38,29 +38,29 @@
 
 ### 管理员后台 (`/admin`)
 
-| 页面 | 路径 | 功能 |
-|------|------|------|
-| 管理仪表盘 | `/admin` | 用户数、域名数、访问量统计 |
-| 域名管理 | `/admin/domains` | 域名列表、搜索、分页 |
-| 添加域名 | `/admin/domains/new` | 指定用户添加域名 |
-| 编辑域名 | `/admin/domains/:id/edit` | 修改域名配置 |
-| 用户管理 | `/admin/users` | 用户列表、搜索、分页 |
-| 添加用户 | `/admin/users/new` | 注册新用户 |
-| 编辑用户 | `/admin/users/:id/edit` | 修改用户信息 |
-| 模板管理 | `/admin/templates` | 模板列表、添加/删除 |
-| 站点设置 | `/admin/settings` | 站点标题、页脚、统计代码 |
+| 页面 | 路径 | 功能 | 状态 |
+|------|------|------|------|
+| 管理仪表盘 | `/admin` | 用户数、域名数、访问量统计 | ✅ |
+| 域名管理 | `/admin/domains` | 域名列表、搜索、分页 | ✅ |
+| 添加域名 | `/admin/domains` (POST) | 指定用户添加域名 | ✅ |
+| 编辑域名 | `/admin/domains/:id/edit` | 修改域名配置 | ✅ |
+| 用户管理 | `/admin/users` | 用户列表、搜索、分页 | ✅ |
+| 添加用户 | `/admin/users` (POST) | 注册新用户 | ✅ |
+| 编辑用户 | `/admin/users/:id/edit` | 修改用户信息 | ✅ |
+| 模板管理 | `/admin/templates` | 模板列表、添加/删除 | 待开发 |
+| 站点设置 | `/admin/settings` | 站点标题、页脚、统计代码 | ✅ |
 
 ### 用户后台增强
 
-| 页面 | 路径 | 功能 |
-|------|------|------|
-| 域名编辑 | `/domains/:id/edit` | 编辑标题、内容、模板 |
-| 模板选择 | `/templates` | 浏览模板、预览、应用 |
-| 统计数据 | `/domains/:id/stats` | 访问量趋势、UV/PV |
-| 修改密码 | `/settings/password` | 修改登录密码 |
-| 个人设置 | `/settings` | 昵称、邮箱修改 |
-| 代码编辑器 | `/domains/:id/code` | 在线编辑 HTML |
-| 文档编辑器 | `/domains/:id/doc` | 富文本编辑 |
+| 页面 | 路径 | 功能 | 状态 |
+|------|------|------|------|
+| 域名编辑 | `/domains/:id/edit` | 编辑标题、内容、模板 | 待开发 |
+| 模板选择 | `/templates` | 浏览模板、预览、应用 | 待开发 |
+| 统计数据 | `/domains/:id/stats` | 访问量趋势、UV/PV | 待开发 |
+| 修改密码 | `/settings/password` | 修改登录密码 | ✅ |
+| 个人设置 | `/settings` | 昵称、邮箱修改 | ✅（基础版） |
+| 代码编辑器 | `/domains/:id/code` | 在线编辑 HTML | 待开发 |
+| 文档编辑器 | `/domains/:id/doc` | 富文本编辑 | 待开发 |
 
 ### 公开页面
 
