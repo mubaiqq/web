@@ -1,0 +1,39 @@
+{{ define "403.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>403 — 权限不足</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body{-webkit-font-smoothing:antialiased}
+    .glass{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .page-bg{background:linear-gradient(160deg,#f0f2ff 0%,#f8f9fc 40%,#f5f3ff 70%,#eef2ff 100%)}
+  </style>
+</head>
+<body class="page-bg min-h-screen flex items-center justify-center">
+  <div class="text-center px-6">
+    <div class="glass rounded-3xl p-12 max-w-md mx-auto">
+      <div class="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mx-auto mb-6">
+        <i data-lucide="shield-off" class="w-10 h-10 text-amber-400"></i>
+      </div>
+      <h1 class="text-6xl font-extrabold text-gray-200 mb-2">403</h1>
+      <p class="text-lg font-semibold text-gray-700 mb-2">权限不足</p>
+      <p class="text-sm text-gray-400 mb-8">{{ .Message }}</p>
+      <div class="flex items-center justify-center gap-3">
+        <a href="/" class="px-5 py-2.5 bg-white/80 hover:bg-white border border-gray-200/80 text-sm font-medium rounded-xl transition">
+          返回首页
+        </a>
+        <a href="/dashboard" class="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition">
+          用户后台
+        </a>
+      </div>
+    </div>
+  </div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
+{{ end }}

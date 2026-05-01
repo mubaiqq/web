@@ -1,0 +1,30 @@
+{{ define "404.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>域名未绑定 — DomainOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#6366f1'}}}}</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    .page-bg{background:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 30%,#f0f9ff 60%,#ede9fe 100%)}
+  </style>
+</head>
+<body class="page-bg text-gray-900 min-h-screen flex items-center justify-center">
+  <div class="text-center px-6">
+    <div class="text-[8rem] font-black bg-gradient-to-br from-indigo-200 to-violet-200 bg-clip-text text-transparent select-none leading-none mb-2">404</div>
+    <h2 class="text-lg font-bold mb-3">域名未绑定</h2>
+    <div class="inline-block px-4 py-1.5 bg-white/60 backdrop-blur border border-white/50 rounded-xl text-sm font-mono text-gray-500 mb-4 shadow-sm">{{ .Host }}</div>
+    <p class="text-sm text-gray-400 mb-6">此域名尚未绑定到任何站点</p>
+    <a href="/" class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i>
+      返回首页
+    </a>
+  </div>
+  <script>lucide.createIcons();</script>
+</body>
+</html>
+{{ end }}

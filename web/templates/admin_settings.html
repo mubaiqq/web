@@ -1,0 +1,175 @@
+{{ define "admin_settings.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>站点设置 — DomainOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#6366f1',primaryDark:'#4f46e5'}}}}</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body{-webkit-font-smoothing:antialiased}
+    .glass-nav{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.3)}
+    .glass-side{background:rgba(255,255,255,0.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1px solid rgba(255,255,255,0.4)}
+    .dash-bg{background:linear-gradient(160deg,#f0f2ff 0%,#f8f9fc 40%,#f5f3ff 70%,#eef2ff 100%)}
+    .card-glass{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .sidebar-item.active{background:rgba(99,102,241,0.08);color:#6366f1}
+    .sidebar-item:not(.active):hover{background:rgba(0,0,0,0.03);color:#111827}
+  </style>
+</head>
+<body class="dash-bg text-gray-900 min-h-screen">
+
+  <nav class="glass-nav sticky top-0 z-50">
+    <div class="flex items-center justify-between h-14 px-6">
+      <a href="/admin" class="flex items-center gap-2.5 text-gray-900 font-bold text-lg no-underline">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-200">
+          <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+        </div>
+        DomainOS <span class="text-xs font-medium text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg ml-1">管理后台</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">用户后台</a>
+        <a href="/" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">首页</a>
+        <a href="/logout" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">退出</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="flex min-h-[calc(100vh-56px)]">
+    <aside class="glass-side w-56 flex-shrink-0 flex flex-col">
+      <div class="flex-1 py-5 px-3 space-y-5 overflow-y-auto">
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">概览</div>
+          <a href="/admin" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            仪表盘
+          </a>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">管理</div>
+          <div class="space-y-0.5">
+            <a href="/admin/domains" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="globe-2" class="w-4 h-4"></i>
+              域名管理
+            </a>
+            <a href="/admin/users" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="users" class="w-4 h-4"></i>
+              用户管理
+            </a>
+          </div>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">系统</div>
+          <div class="space-y-0.5">
+            <a href="/admin/settings" class="sidebar-item active flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              站点设置
+            </a>
+            <a href="/" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="home" class="w-4 h-4"></i>
+              返回首页
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/30 p-4 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-md shadow-amber-200">{{ slice .User.Nickname 0 1 }}</div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold truncate">{{ .User.Nickname }}</div>
+          <div class="text-xs text-amber-500 font-medium">管理员</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto">
+      <div class="max-w-3xl">
+        <div class="mb-6">
+          <h1 class="text-xl font-bold">站点设置</h1>
+          <p class="text-sm text-gray-400 mt-0.5">配置平台基本信息</p>
+        </div>
+
+        {{ if .Success }}
+        <div class="mb-6 px-5 py-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl">{{ .Success }}</div>
+        {{ end }}
+        {{ if .Error }}
+        <div class="mb-6 px-5 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl">{{ .Error }}</div>
+        {{ end }}
+
+        <!-- 站点信息 -->
+        <div class="card-glass rounded-2xl overflow-hidden mb-6">
+          <div class="flex items-center gap-2 px-6 py-4 border-b border-white/30">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center">
+              <i data-lucide="globe" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <h3 class="text-sm font-bold">站点信息</h3>
+          </div>
+          <form method="POST" action="/admin/settings" class="p-6 space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">站点标题</label>
+              <input type="text" name="site_title" value="{{ .SiteConfig.SiteTitle }}"
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">页脚文字</label>
+              <input type="text" name="footer_text" value="{{ .SiteConfig.FooterText }}"
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">背景图片 URL</label>
+              <input type="text" name="background_image" value="{{ .SiteConfig.BackgroundImage }}" placeholder="https://..."
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">统计代码</label>
+              <textarea name="tracking_code" rows="4" placeholder="粘贴第三方统计代码..."
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition resize-none font-mono text-xs">{{ .SiteConfig.TrackingCode }}</textarea>
+            </div>
+            <div class="pt-2">
+              <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition">
+                保存设置
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- 修改密码 -->
+        <div class="card-glass rounded-2xl overflow-hidden">
+          <div class="flex items-center gap-2 px-6 py-4 border-b border-white/30">
+            <div class="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-white"></i>
+            </div>
+            <h3 class="text-sm font-bold">修改管理员密码</h3>
+          </div>
+          <form method="POST" action="/admin/settings/password" class="p-6 space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">原密码</label>
+              <input type="password" name="old_password" required
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">新密码</label>
+              <input type="password" name="new_password" placeholder="至少6位" required
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">确认新密码</label>
+              <input type="password" name="confirm" required
+                class="w-full px-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <div class="pt-2">
+              <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-amber-200 transition">
+                修改密码
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
+{{ end }}

@@ -1,0 +1,406 @@
+{{ define "admin_domains.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>域名管理 — DomainOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#6366f1',primaryDark:'#4f46e5'}}}}</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body{-webkit-font-smoothing:antialiased}
+    .glass-nav{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.3)}
+    .glass-side{background:rgba(255,255,255,0.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1px solid rgba(255,255,255,0.4)}
+    .dash-bg{background:linear-gradient(160deg,#f0f2ff 0%,#f8f9fc 40%,#f5f3ff 70%,#eef2ff 100%)}
+    .card-glass{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .sidebar-item.active{background:rgba(99,102,241,0.08);color:#6366f1}
+    .sidebar-item:not(.active):hover{background:rgba(0,0,0,0.03);color:#111827}
+    .modal-overlay{background:rgba(0,0,0,0.4);backdrop-filter:blur(4px)}
+  </style>
+</head>
+<body class="dash-bg text-gray-900 min-h-screen">
+
+  <nav class="glass-nav sticky top-0 z-50">
+    <div class="flex items-center justify-between h-14 px-6">
+      <a href="/admin" class="flex items-center gap-2.5 text-gray-900 font-bold text-lg no-underline">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-200">
+          <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+        </div>
+        DomainOS <span class="text-xs font-medium text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg ml-1">管理后台</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">用户后台</a>
+        <a href="/" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">首页</a>
+        <a href="/logout" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">退出</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="flex min-h-[calc(100vh-56px)]">
+    <aside class="glass-side w-56 flex-shrink-0 flex flex-col">
+      <div class="flex-1 py-5 px-3 space-y-5 overflow-y-auto">
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">概览</div>
+          <a href="/admin" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            仪表盘
+          </a>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">管理</div>
+          <div class="space-y-0.5">
+            <a href="/admin/domains" class="sidebar-item active flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition">
+              <i data-lucide="globe-2" class="w-4 h-4"></i>
+              域名管理
+            </a>
+            <a href="/admin/users" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="users" class="w-4 h-4"></i>
+              用户管理
+            </a>
+          </div>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">系统</div>
+          <div class="space-y-0.5">
+            <a href="/admin/settings" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              站点设置
+            </a>
+            <a href="/" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="home" class="w-4 h-4"></i>
+              返回首页
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/30 p-4 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-md shadow-amber-200">{{ slice .User.Nickname 0 1 }}</div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold truncate">{{ .User.Nickname }}</div>
+          <div class="text-xs text-amber-500 font-medium">管理员</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto">
+      <div class="max-w-6xl">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-xl font-bold">域名管理</h1>
+            <p class="text-sm text-gray-400 mt-0.5">共 {{ .Total }} 个域名</p>
+          </div>
+          <button onclick="document.getElementById('addModal').classList.remove('hidden')" class="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition flex items-center gap-2">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            添加域名
+          </button>
+        </div>
+
+        <!-- 搜索和筛选 -->
+        <div class="card-glass rounded-2xl mb-6 p-4">
+          <form method="GET" action="/admin/domains" class="flex items-center gap-3">
+            <div class="flex-1 relative">
+              <i data-lucide="search" class="w-4 h-4 text-gray-300 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" name="search" value="{{ .Search }}" placeholder="搜索域名或标题..."
+                class="w-full pl-10 pr-4 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+            </div>
+            <select name="status" class="px-3 py-2.5 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none focus:border-indigo-400 transition">
+              <option value="">全部状态</option>
+              <option value="1" {{ if eq .StatusFilter "1" }}selected{{ end }}>启用</option>
+              <option value="0" {{ if eq .StatusFilter "0" }}selected{{ end }}>禁用</option>
+            </select>
+            <button type="submit" class="px-5 py-2.5 bg-white/80 hover:bg-white border border-gray-200/80 text-sm font-medium rounded-xl transition">
+              筛选
+            </button>
+          </form>
+        </div>
+
+        <!-- 提示信息 -->
+        <div id="toast" class="hidden fixed top-20 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg transition-all"></div>
+
+        <!-- 域名列表 -->
+        <div class="card-glass rounded-2xl overflow-hidden">
+          {{ if .Domains }}
+          <table class="w-full">
+            <thead>
+              <tr class="border-b border-white/30">
+                <th class="text-left px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">域名</th>
+                <th class="text-left px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">所属用户</th>
+                <th class="text-left px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">模式</th>
+                <th class="text-left px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">状态</th>
+                <th class="text-left px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">创建时间</th>
+                <th class="text-right px-6 py-3 text-[10px] font-bold text-gray-400 uppercase tracking-widest">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Domains }}
+              <tr class="border-b border-white/20 last:border-0 hover:bg-white/40 transition">
+                <td class="px-6 py-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center flex-shrink-0">
+                      {{ if eq .Mode "page" }}
+                        <i data-lucide="layout" class="w-4 h-4 text-gray-400"></i>
+                      {{ else }}
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400"></i>
+                      {{ end }}
+                    </div>
+                    <div>
+                      <div class="text-sm font-semibold">{{ .Hostname }}</div>
+                      <div class="text-xs text-gray-400">{{ .Title }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-6 py-4">
+                  <span class="text-sm text-gray-500">{{ index $.UserMap .UserID }}</span>
+                </td>
+                <td class="px-6 py-4">
+                  {{ if eq .Mode "page" }}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-violet-50 text-violet-600 text-xs font-semibold rounded-lg">
+                      <i data-lucide="layout" class="w-3 h-3"></i> 页面
+                    </span>
+                  {{ else }}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 text-xs font-semibold rounded-lg">
+                      <i data-lucide="arrow-right" class="w-3 h-3"></i> 跳转
+                    </span>
+                  {{ end }}
+                </td>
+                <td class="px-6 py-4">
+                  {{ if eq .Status 1 }}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-600 text-xs font-semibold rounded-lg">启用</span>
+                  {{ else }}
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-500 text-xs font-semibold rounded-lg">禁用</span>
+                  {{ end }}
+                </td>
+                <td class="px-6 py-4">
+                  <span class="text-sm text-gray-400">{{ formatTime .CreatedAt }}</span>
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center justify-end gap-1">
+                    <button onclick="editDomain({{ .ID }}, '{{ .Hostname }}', '{{ .Mode }}', '{{ .Target }}', '{{ .Title }}', '{{ .Content }}', '{{ .RedirectType }}', {{ .UserID }}, {{ .Status }})" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-indigo-500 hover:bg-indigo-50 rounded-lg transition">
+                      <i data-lucide="pencil" class="w-3 h-3"></i> 编辑
+                    </button>
+                    <form method="POST" action="/admin/domains/{{ .ID }}/toggle" style="display:inline">
+                      <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs {{ if eq .Status 1 }}text-amber-500 hover:bg-amber-50{{ else }}text-emerald-500 hover:bg-emerald-50{{ end }} rounded-lg transition">
+                        {{ if eq .Status 1 }}
+                          <i data-lucide="pause" class="w-3 h-3"></i> 禁用
+                        {{ else }}
+                          <i data-lucide="play" class="w-3 h-3"></i> 启用
+                        {{ end }}
+                      </button>
+                    </form>
+                    <form method="POST" action="/admin/domains/{{ .ID }}/delete" style="display:inline" onsubmit="return confirm('确定删除 {{ .Hostname }} ？')">
+                      <button type="submit" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg transition">
+                        <i data-lucide="trash-2" class="w-3 h-3"></i> 删除
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+              {{ end }}
+            </tbody>
+          </table>
+
+          <!-- 分页 -->
+          {{ if gt .TotalPages 1 }}
+          <div class="flex items-center justify-between px-6 py-4 border-t border-white/30">
+            <span class="text-xs text-gray-400">第 {{ .Page }} / {{ .TotalPages }} 页</span>
+            <div class="flex items-center gap-1">
+              {{ if gt .Page 1 }}
+                <a href="?page={{ sub .Page 1 }}&search={{ .Search }}" class="px-3 py-1.5 text-xs bg-white/60 hover:bg-white rounded-lg transition">上一页</a>
+              {{ end }}
+              {{ $start := max 1 (sub .Page 2) }}
+              {{ $end := min .TotalPages (add .Page 2) }}
+              {{ range seq $start $end }}
+                <a href="?page={{ . }}&search={{ $.Search }}" class="px-3 py-1.5 text-xs {{ if eq . $.Page }}bg-indigo-500 text-white{{ else }}bg-white/60 hover:bg-white{{ end }} rounded-lg transition">{{ . }}</a>
+              {{ end }}
+              {{ if lt .Page .TotalPages }}
+                <a href="?page={{ add .Page 1 }}&search={{ .Search }}" class="px-3 py-1.5 text-xs bg-white/60 hover:bg-white rounded-lg transition">下一页</a>
+              {{ end }}
+            </div>
+          </div>
+          {{ end }}
+
+          {{ else }}
+          <div class="py-20 text-center">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center mx-auto mb-4">
+              <i data-lucide="globe-2" class="w-7 h-7 text-gray-300"></i>
+            </div>
+            <p class="text-sm text-gray-400 font-medium">暂无域名</p>
+          </div>
+          {{ end }}
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 添加域名弹窗 -->
+  <div id="addModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <h3 class="text-sm font-bold">添加域名</h3>
+        <button onclick="document.getElementById('addModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form method="POST" action="/admin/domains" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">域名 *</label>
+          <input type="text" name="hostname" placeholder="example.com" required
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">所属用户 ID *</label>
+          <input type="number" name="user_id" placeholder="1" required
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">模式</label>
+            <select name="mode" id="addModeSelect" onchange="addToggleFields()"
+              class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 transition">
+              <option value="page">页面</option>
+              <option value="redirect">跳转</option>
+            </select>
+          </div>
+          <div id="addRedirectTypeField" class="hidden">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">跳转类型</label>
+            <select name="redirect_type" class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 transition">
+              <option value="301">301 永久</option>
+              <option value="302">302 临时</option>
+            </select>
+          </div>
+        </div>
+        <div id="addTitleField">
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">页面标题</label>
+          <input type="text" name="title" placeholder="我的网站"
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div id="addTargetField" class="hidden">
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">跳转地址</label>
+          <input type="text" name="target" placeholder="https://target.com"
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">页面内容</label>
+          <textarea name="content" rows="3" placeholder="页面描述或内容..."
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition resize-none"></textarea>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" onclick="document.getElementById('addModal').classList.add('hidden')" class="px-5 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition">取消</button>
+          <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition">添加</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 编辑域名弹窗 -->
+  <div id="editModal" class="hidden fixed inset-0 z-50 flex items-center justify-center modal-overlay">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <h3 class="text-sm font-bold">编辑域名</h3>
+        <button onclick="document.getElementById('editModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <form id="editForm" method="POST" action="" class="p-6 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">域名</label>
+          <input type="text" name="hostname" id="editHostname" required
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">所属用户 ID</label>
+          <input type="number" name="user_id" id="editUserID" required
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">模式</label>
+            <select name="mode" id="editModeSelect" onchange="editToggleFields()"
+              class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 transition">
+              <option value="page">页面</option>
+              <option value="redirect">跳转</option>
+            </select>
+          </div>
+          <div id="editRedirectTypeField" class="hidden">
+            <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">跳转类型</label>
+            <select name="redirect_type" id="editRedirectType"
+              class="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 transition">
+              <option value="301">301 永久</option>
+              <option value="302">302 临时</option>
+            </select>
+          </div>
+        </div>
+        <div id="editTitleField">
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">页面标题</label>
+          <input type="text" name="title" id="editTitle"
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div id="editTargetField" class="hidden">
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">跳转地址</label>
+          <input type="text" name="target" id="editTarget"
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">页面内容</label>
+          <textarea name="content" id="editContent" rows="3"
+            class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition resize-none"></textarea>
+        </div>
+        <div class="flex justify-end gap-3 pt-2">
+          <button type="button" onclick="document.getElementById('editModal').classList.add('hidden')" class="px-5 py-2.5 text-sm text-gray-500 hover:bg-gray-100 rounded-xl transition">取消</button>
+          <button type="submit" class="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-600 hover:to-violet-600 text-white text-sm font-semibold rounded-xl shadow-md shadow-indigo-200 transition">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    function addToggleFields(){
+      const m=document.getElementById('addModeSelect').value;
+      document.getElementById('addTargetField').classList.toggle('hidden',m!=='redirect');
+      document.getElementById('addTitleField').classList.toggle('hidden',m!=='page');
+      document.getElementById('addRedirectTypeField').classList.toggle('hidden',m!=='redirect');
+    }
+
+    function editToggleFields(){
+      const m=document.getElementById('editModeSelect').value;
+      document.getElementById('editTargetField').classList.toggle('hidden',m!=='redirect');
+      document.getElementById('editTitleField').classList.toggle('hidden',m!=='page');
+      document.getElementById('editRedirectTypeField').classList.toggle('hidden',m!=='redirect');
+    }
+
+    function editDomain(id, hostname, mode, target, title, content, redirectType, userId, status){
+      document.getElementById('editForm').action='/admin/domains/'+id+'/edit';
+      document.getElementById('editHostname').value=hostname;
+      document.getElementById('editModeSelect').value=mode;
+      document.getElementById('editTarget').value=target;
+      document.getElementById('editTitle').value=title;
+      document.getElementById('editContent').value=content;
+      document.getElementById('editRedirectType').value=redirectType;
+      document.getElementById('editUserID').value=userId;
+      editToggleFields();
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    // URL 参数提示
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('success')){
+      const t=document.getElementById('toast');
+      t.textContent=params.get('success');
+      t.className='fixed top-20 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg bg-emerald-500 text-white';
+      setTimeout(()=>t.classList.add('hidden'),3000);
+    }
+    if(params.get('error')){
+      const t=document.getElementById('toast');
+      t.textContent=params.get('error');
+      t.className='fixed top-20 right-6 z-50 px-5 py-3 rounded-xl text-sm font-medium shadow-lg bg-red-500 text-white';
+      setTimeout(()=>t.classList.add('hidden'),3000);
+    }
+  </script>
+</body>
+</html>
+{{ end }}

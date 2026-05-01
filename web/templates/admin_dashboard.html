@@ -1,0 +1,224 @@
+{{ define "admin_dashboard.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 — DomainOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#6366f1',primaryDark:'#4f46e5'}}}}</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body{-webkit-font-smoothing:antialiased}
+    .glass-nav{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.3)}
+    .glass-side{background:rgba(255,255,255,0.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1px solid rgba(255,255,255,0.4)}
+    .dash-bg{background:linear-gradient(160deg,#f0f2ff 0%,#f8f9fc 40%,#f5f3ff 70%,#eef2ff 100%)}
+    .stat-card{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .card-glass{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .sidebar-item.active{background:rgba(99,102,241,0.08);color:#6366f1}
+    .sidebar-item:not(.active):hover{background:rgba(0,0,0,0.03);color:#111827}
+  </style>
+</head>
+<body class="dash-bg text-gray-900 min-h-screen">
+
+  <!-- Top Nav -->
+  <nav class="glass-nav sticky top-0 z-50">
+    <div class="flex items-center justify-between h-14 px-6">
+      <a href="/admin" class="flex items-center gap-2.5 text-gray-900 font-bold text-lg no-underline">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-200">
+          <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
+        </div>
+        DomainOS <span class="text-xs font-medium text-amber-500 bg-amber-50 px-2 py-0.5 rounded-lg ml-1">管理后台</span>
+      </a>
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">用户后台</a>
+        <a href="/" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">首页</a>
+        <a href="/logout" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">退出</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="flex min-h-[calc(100vh-56px)]">
+
+    <!-- Sidebar -->
+    <aside class="glass-side w-56 flex-shrink-0 flex flex-col">
+      <div class="flex-1 py-5 px-3 space-y-5 overflow-y-auto">
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">概览</div>
+          <a href="/admin" class="sidebar-item active flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            仪表盘
+          </a>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">管理</div>
+          <div class="space-y-0.5">
+            <a href="/admin/domains" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="globe-2" class="w-4 h-4"></i>
+              域名管理
+            </a>
+            <a href="/admin/users" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="users" class="w-4 h-4"></i>
+              用户管理
+            </a>
+          </div>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">系统</div>
+          <div class="space-y-0.5">
+            <a href="/admin/settings" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              站点设置
+            </a>
+            <a href="/" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="home" class="w-4 h-4"></i>
+              返回首页
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/30 p-4 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-md shadow-amber-200">{{ slice .User.Nickname 0 1 }}</div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold truncate">{{ .User.Nickname }}</div>
+          <div class="text-xs text-amber-500 font-medium">管理员</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 p-8 overflow-y-auto">
+      <div class="max-w-6xl">
+        <!-- Header -->
+        <div class="mb-6">
+          <h1 class="text-xl font-bold">管理仪表盘</h1>
+          <p class="text-sm text-gray-400 mt-0.5">平台运营数据概览</p>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">用户总数</span>
+            </div>
+            <div class="text-3xl font-extrabold text-indigo-600">{{ .UserCount }}</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                <i data-lucide="globe-2" class="w-4 h-4 text-violet-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">域名总数</span>
+            </div>
+            <div class="text-3xl font-extrabold text-violet-600">{{ .DomainCount }}</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">活跃域名</span>
+            </div>
+            <div class="text-3xl font-extrabold text-emerald-600">{{ .ActiveDomains }}</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                <i data-lucide="bar-chart-3" class="w-4 h-4 text-amber-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">总访问量</span>
+            </div>
+            <div class="text-3xl font-extrabold text-amber-600">{{ .VisitCount }}</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center">
+                <i data-lucide="trending-up" class="w-4 h-4 text-rose-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">今日访问</span>
+            </div>
+            <div class="text-3xl font-extrabold text-rose-600">{{ .TodayVisits }}</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- 最近注册用户 -->
+          <div class="card-glass rounded-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/30">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+                  <i data-lucide="user-plus" class="w-3.5 h-3.5 text-indigo-500"></i>
+                </div>
+                <h3 class="text-sm font-bold">最近注册用户</h3>
+              </div>
+              <a href="/admin/users" class="text-xs text-indigo-500 hover:text-indigo-700 transition">查看全部 →</a>
+            </div>
+            <div class="divide-y divide-white/20">
+              {{ if .RecentUsers }}
+                {{ range .RecentUsers }}
+                <div class="flex items-center gap-3 px-6 py-3.5">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-violet-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{{ slice .Nickname 0 1 }}</div>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-sm font-semibold truncate">{{ .Username }}</div>
+                    <div class="text-xs text-gray-400">{{ .Email }}</div>
+                  </div>
+                  <span class="text-xs text-gray-300">{{ formatTime .CreatedAt }}</span>
+                </div>
+                {{ end }}
+              {{ else }}
+                <div class="py-10 text-center text-sm text-gray-300">暂无用户</div>
+              {{ end }}
+            </div>
+          </div>
+
+          <!-- 最近添加域名 -->
+          <div class="card-glass rounded-2xl overflow-hidden">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-white/30">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                  <i data-lucide="globe-2" class="w-3.5 h-3.5 text-violet-500"></i>
+                </div>
+                <h3 class="text-sm font-bold">最近添加域名</h3>
+              </div>
+              <a href="/admin/domains" class="text-xs text-indigo-500 hover:text-indigo-700 transition">查看全部 →</a>
+            </div>
+            <div class="divide-y divide-white/20">
+              {{ if .RecentDomains }}
+                {{ range .RecentDomains }}
+                <div class="flex items-center gap-3 px-6 py-3.5">
+                  <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-100 to-gray-50 flex items-center justify-center flex-shrink-0">
+                    {{ if eq .Mode "page" }}
+                      <i data-lucide="layout" class="w-4 h-4 text-gray-400"></i>
+                    {{ else }}
+                      <i data-lucide="arrow-right" class="w-4 h-4 text-gray-400"></i>
+                    {{ end }}
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <div class="text-sm font-semibold truncate">{{ .Hostname }}</div>
+                    <div class="text-xs text-gray-400">{{ if eq .Mode "page" }}页面{{ else }}跳转{{ end }}</div>
+                  </div>
+                  {{ if eq .Status 1 }}
+                    <span class="text-xs text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg">启用</span>
+                  {{ else }}
+                    <span class="text-xs text-red-500 bg-red-50 px-2 py-0.5 rounded-lg">禁用</span>
+                  {{ end }}
+                </div>
+                {{ end }}
+              {{ else }}
+                <div class="py-10 text-center text-sm text-gray-300">暂无域名</div>
+              {{ end }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
+{{ end }}
