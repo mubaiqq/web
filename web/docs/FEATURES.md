@@ -24,37 +24,37 @@
 ### 2.1 仪表盘
 | 功能 | 原文件 | Go 状态 |
 |------|--------|---------|
-| 用户总数统计 | `hom.php` | [ ] |
-| 域名总数统计 | `hom.php` | [ ] |
-| 总访问量统计 | `hom.php` | [ ] |
-| 最近注册用户 | `welcome-1.php` | [ ] |
-| 最近添加域名 | `welcome-1.php` | [ ] |
+| 用户总数统计 | `hom.php` | [x] |
+| 域名总数统计 | `hom.php` | [x] |
+| 总访问量统计 | `hom.php` | [x] |
+| 最近注册用户 | `welcome-1.php` | [x] |
+| 最近添加域名 | `welcome-1.php` | [x] |
 
 ### 2.2 域名管理
 | 功能 | 原文件 | Go 状态 |
 |------|--------|---------|
-| 域名列表（分页、搜索） | `ymlist.php` | [ ] |
-| 显示域名所属用户 | `ymlist.php` | [ ] |
-| 显示域名状态（启用/禁用） | `ymlist.php` | [ ] |
+| 域名列表（分页、搜索） | `ymlist.php` | [x] |
+| 显示域名所属用户 | `ymlist.php` | [x] |
+| 显示域名状态（启用/禁用） | `ymlist.php` | [x] |
 | 显示域名模板 | `ymlist.php` | [ ] |
-| 添加域名（指定用户） | `add_domain.php` | [ ] |
+| 添加域名（指定用户） | `add_domain.php` | [x] |
 | 批量添加域名 | `addt_domain.php` | [ ] |
-| 编辑域名（修改跳转地址） | `edit_domain.php` | [ ] |
-| 保存编辑 | `save_edit.php` | [ ] |
-| 删除域名 | `delete_domain.php` | [ ] |
-| 域名处理（启用/禁用切换） | `ymcl.php` | [ ] |
+| 编辑域名（修改跳转地址） | `edit_domain.php` | [x] |
+| 保存编辑 | `save_edit.php` | [x] |
+| 删除域名 | `delete_domain.php` | [x] |
+| 域名处理（启用/禁用切换） | `ymcl.php` | [x] |
 | 域名清理（批量删除） | `ql.php` | [ ] |
 
 ### 2.3 用户管理
 | 功能 | 原文件 | Go 状态 |
 |------|--------|---------|
-| 用户列表（搜索、分页） | `user_list.php` | [ ] |
-| 注册新用户 | `register.php` | [ ] |
-| 添加用户 | `tjyh.php` | [ ] |
+| 用户列表（搜索、分页） | `user_list.php` | [x] |
+| 注册新用户 | `register.php` | [x] |
+| 添加用户 | `tjyh.php` | [x] |
 | 查看用户域名 | `user_domains.php` | [ ] |
-| 用户名自动补全 | `autocomplete_user.php` | [ ] |
-| 修改用户密码 | `czmm.php` | [ ] |
-| 编辑用户权限 | `edu.php` | [ ] |
+| 用户名自动补全 | `autocomplete_user.php` | [x] |
+| 修改用户密码 | `czmm.php` | [x] |
+| 编辑用户权限 | `edu.php` | [x] |
 
 ### 2.4 模板管理
 | 功能 | 原文件 | Go 状态 |
@@ -68,11 +68,11 @@
 ### 2.5 站点设置
 | 功能 | 原文件 | Go 状态 |
 |------|--------|---------|
-| 站点标题 | `site.php` | [ ] |
-| 页脚文字 | `site.php` | [ ] |
-| 管理员账号密码 | `site.php` | [ ] |
-| 背景图片 URL | `site.php` | [ ] |
-| 统计代码（51.la 等） | `site.php` | [ ] |
+| 站点标题 | `site.php` | [x] |
+| 页脚文字 | `site.php` | [x] |
+| 管理员账号密码 | `site.php` | [x] |
+| 背景图片 URL | `site.php` | [x] |
+| 统计代码（51.la 等） | `site.php` | [x] |
 
 ---
 
