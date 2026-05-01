@@ -56,6 +56,21 @@ type VisitLog struct {
 	CreatedAt int64 `gorm:"autoCreateTime"`
 }
 
+type Template struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	Name      string    `json:"name" gorm:"uniqueIndex;size:100;not null"`
+	Desc      string    `json:"desc" gorm:"size:255"`
+	Content   string    `json:"content" gorm:"type:text"`
+	Status    int       `json:"status" gorm:"default:1"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type SiteSetting struct {
+	ID    uint   `gorm:"primaryKey"`
+	Key   string `gorm:"uniqueIndex;size:100;not null"`
+	Value string `gorm:"type:text"`
+}
+
 // ── DB Init ──
 
 func initDB(path string) *gorm.DB {
@@ -64,7 +79,7 @@ func initDB(path string) *gorm.DB {
 	if err != nil {
 		log.Fatalf("db init: %v", err)
 	}
-	db.AutoMigrate(&User{}, &Domain{}, &VisitLog{})
+	db.AutoMigrate(&User{}, &Domain{}, &VisitLog{}, &Template{}, &SiteSetting{})
 
 	sqlDB, _ := db.DB()
 	sqlDB.Exec("PRAGMA journal_mode=WAL")
@@ -121,6 +136,44 @@ func templateFuncs() template.FuncMap {
 		"uintToString": func(i uint) string {
 			return strconv.FormatUint(uint64(i), 10)
 		},
+		"safeHTML": func(s string) template.HTML {
+			return template.HTML(s)
+		},
+		"defaultStr": func(s, def string) string {
+			if s == "" {
+				return def
+			}
+			return s
+		},
+	}
+}
+
+// ── Site Settings helpers ──
+
+func getSetting(db *gorm.DB, key string) string {
+	var s SiteSetting
+	if err := db.Where("key = ?", key).First(&s).Error; err != nil {
+		return ""
+	}
+	return s.Value
+}
+
+func getAllSettings(db *gorm.DB) map[string]string {
+	var settings []SiteSetting
+	db.Find(&settings)
+	m := make(map[string]string)
+	for _, s := range settings {
+		m[s.Key] = s.Value
+	}
+	return m
+}
+
+func setSetting(db *gorm.DB, key, value string) {
+	var s SiteSetting
+	if err := db.Where("key = ?", key).First(&s).Error; err != nil {
+		db.Create(&SiteSetting{Key: key, Value: value})
+	} else {
+		db.Model(&s).Update("value", value)
 	}
 }
 
@@ -332,15 +385,31 @@ func main() {
 			var domains []Domain
 			db.Where("user_id = ?", user.ID).Order("id DESC").Find(&domains)
 
+			// Get user's domain hostnames for visit count
+			var hostnames []string
+			for _, d := range domains {
+				hostnames = append(hostnames, d.Hostname)
+			}
+			var visitCount int64
+			if len(hostnames) > 0 {
+				db.Model(&VisitLog{}).Where("domain IN ?", hostnames).Count(&visitCount)
+			}
+
+			// Get available templates
+			var templates []Template
+			db.Where("status = ?", 1).Order("id ASC").Find(&templates)
+
 			// Announcements (hardcoded for now)
 			announcements := []map[string]string{
-				{"title": "欢迎使用 DomainOS v0.1.0", "desc": "平台已上线，支持域名绑定、页面渲染和智能跳转功能。", "date": "2026-05-01", "color": "indigo"},
-				{"title": "功能预告", "desc": "管理员后台、模板系统、访问统计等功能正在开发中，敬请期待。", "date": "2026-05-01", "color": "emerald"},
+				{"title": "欢迎使用 DomainOS v0.2.0", "desc": "平台已上线，支持域名绑定、页面渲染、模板系统和智能跳转功能。", "date": "2026-05-01", "color": "indigo"},
+				{"title": "新功能上线", "desc": "模板管理、站点设置、域名内容编辑、用户设置等功能已上线。", "date": "2026-05-02", "color": "emerald"},
 			}
 
 			c.HTML(http.StatusOK, "dashboard.html", gin.H{
 				"User":          user,
 				"Domains":       domains,
+				"VisitCount":    visitCount,
+				"Templates":     templates,
 				"Announcements": announcements,
 			})
 		})
@@ -376,6 +445,246 @@ func main() {
 			user := c.MustGet("user").(*User)
 			db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).Delete(&Domain{})
 			c.Redirect(http.StatusFound, "/dashboard")
+		})
+
+		auth.POST("/domains/:id", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var d Domain
+			if err := db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).First(&d).Error; err != nil {
+				c.Redirect(http.StatusFound, "/dashboard?error=域名不存在")
+				return
+			}
+			title := c.PostForm("title")
+			content := c.PostForm("content")
+			tmpl := c.PostForm("template")
+			if title != "" {
+				d.Title = title
+			}
+			d.Content = content
+			if tmpl != "" {
+				d.Template = tmpl
+			}
+			db.Save(&d)
+			c.Redirect(http.StatusFound, "/dashboard")
+		})
+
+		// 用户设置页
+		auth.GET("/settings", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			c.HTML(http.StatusOK, "user-settings.html", gin.H{
+				"User":    user,
+				"Success": c.Query("success"),
+				"Error":   c.Query("error"),
+			})
+		})
+
+		// 修改个人信息
+		auth.POST("/settings/profile", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			nickname := c.PostForm("nickname")
+			email := c.PostForm("email")
+			if nickname != "" {
+				db.Model(user).Update("nickname", nickname)
+			}
+			if email != "" {
+				var count int64
+				db.Model(&User{}).Where("email = ? AND id != ?", email, user.ID).Count(&count)
+				if count > 0 {
+					c.Redirect(http.StatusFound, "/settings?error=邮箱已被使用")
+					return
+				}
+				db.Model(user).Update("email", email)
+			}
+			c.Redirect(http.StatusFound, "/settings?success=个人信息已更新")
+		})
+
+		// 修改密码
+		auth.POST("/settings/password", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			oldPwd := c.PostForm("old_password")
+			newPwd := c.PostForm("new_password")
+			confirmPwd := c.PostForm("confirm_password")
+			if oldPwd == "" || newPwd == "" {
+				c.Redirect(http.StatusFound, "/settings?error=请填写所有字段")
+				return
+			}
+			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPwd)); err != nil {
+				c.Redirect(http.StatusFound, "/settings?error=原密码错误")
+				return
+			}
+			if len(newPwd) < 6 {
+				c.Redirect(http.StatusFound, "/settings?error=新密码至少6位")
+				return
+			}
+			if newPwd != confirmPwd {
+				c.Redirect(http.StatusFound, "/settings?error=两次密码不一致")
+				return
+			}
+			hash, _ := bcrypt.GenerateFromPassword([]byte(newPwd), bcrypt.DefaultCost)
+			db.Model(user).Update("password", string(hash))
+			c.Redirect(http.StatusFound, "/settings?success=密码已修改")
+		})
+
+		// 域名编辑页
+		auth.GET("/domains/:id/edit", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var d Domain
+			if err := db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).First(&d).Error; err != nil {
+				c.Redirect(http.StatusFound, "/dashboard?error=域名不存在")
+				return
+			}
+			var templates []Template
+			db.Where("status = ?", 1).Order("id ASC").Find(&templates)
+			c.HTML(http.StatusOK, "domain-edit.html", gin.H{
+				"User":     user,
+				"Domain":   d,
+				"Templates": templates,
+			})
+		})
+
+		// 用户模板中心
+		auth.GET("/templates", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var templates []Template
+			db.Where("status = ?", 1).Order("id ASC").Find(&templates)
+			var domains []Domain
+			db.Where("user_id = ? AND mode = ?", user.ID, "page").Order("id ASC").Find(&domains)
+			c.HTML(http.StatusOK, "user-templates.html", gin.H{
+				"User":      user,
+				"Templates": templates,
+				"Domains":   domains,
+				"Success":   c.Query("success"),
+			})
+		})
+
+		// 模板预览（用户端）
+		auth.GET("/templates/:id/preview", func(c *gin.Context) {
+			var t Template
+			if db.First(&t, c.Param("id")).Error != nil {
+				c.String(http.StatusNotFound, "模板不存在")
+				return
+			}
+			// Render template content as a standalone page
+			siteTitle := getSetting(db, "site_title")
+			if siteTitle == "" {
+				siteTitle = "DomainOS"
+			}
+			previewHTML := `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>模板预览</title>
+<style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:linear-gradient(135deg,#eef2ff,#e0e7ff,#f0f9ff,#ede9fe);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#111827;-webkit-font-smoothing:antialiased}
+.wrap{text-align:center;padding:3rem;max-width:640px;background:rgba(255,255,255,0.6);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.5);border-radius:2rem;box-shadow:0 8px 40px rgba(99,102,241,0.08)}
+h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;background:linear-gradient(135deg,#312e81,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.content{font-size:1.05rem;line-height:1.8;color:#6b7280}</style></head><body><div class="wrap">
+<h1>预览: ` + t.Name + `</h1>
+<div class="content">` + t.Content + `</div>
+<div style="margin-top:2rem;padding:0.3rem 1rem;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.5);border-radius:999px;font-size:0.8rem;color:#9ca3af;font-family:ui-monospace,monospace;display:inline-block">模板: ` + t.Name + `</div>
+</div></body></html>`
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(previewHTML))
+		})
+
+		// 统计分析页
+		auth.GET("/analytics", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var domains []Domain
+			db.Where("user_id = ?", user.ID).Order("id ASC").Find(&domains)
+			c.HTML(http.StatusOK, "analytics.html", gin.H{
+				"User":    user,
+				"Domains": domains,
+			})
+		})
+
+		// 统计 API
+		auth.GET("/api/analytics/stats", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			domain := c.Query("domain")
+			days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+			if days < 1 {
+				days = 7
+			}
+			if days > 365 {
+				days = 365
+			}
+
+			// Verify domain belongs to user
+			var d Domain
+			if err := db.Where("hostname = ? AND user_id = ?", domain, user.ID).First(&d).Error; err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "无权访问"})
+				return
+			}
+
+			now := time.Now()
+			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			startTime := startOfDay.AddDate(0, 0, -days+1)
+
+			// Total PV
+			var totalPV int64
+			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Count(&totalPV)
+
+			// Total UV (distinct IPs)
+			var totalUV int64
+			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Distinct("ip").Count(&totalUV)
+
+			// Today PV
+			var todayPV int64
+			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startOfDay.Unix()).Count(&todayPV)
+
+			// Today UV
+			var todayUV int64
+			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startOfDay.Unix()).Distinct("ip").Count(&todayUV)
+
+			// Daily trend
+			type DayStat struct {
+				Date string
+				PV   int64
+				UV   int64
+			}
+			var trend []DayStat
+			for i := 0; i < days; i++ {
+				dayStart := startTime.AddDate(0, 0, i)
+				dayEnd := dayStart.AddDate(0, 0, 1)
+				var pv int64
+				var uv int64
+				db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ? AND created_at < ?", domain, dayStart.Unix(), dayEnd.Unix()).Count(&pv)
+				db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ? AND created_at < ?", domain, dayStart.Unix(), dayEnd.Unix()).Distinct("ip").Count(&uv)
+				trend = append(trend, DayStat{Date: dayStart.Format("01-02"), PV: pv, UV: uv})
+			}
+
+			var trendLabels []string
+			var trendPV []int64
+			var trendUV []int64
+			for _, t := range trend {
+				trendLabels = append(trendLabels, t.Date)
+				trendPV = append(trendPV, t.PV)
+				trendUV = append(trendUV, t.UV)
+			}
+
+			// Top paths
+			type PathCount struct {
+				Path  string
+				Count int64
+			}
+			var topPaths []PathCount
+			db.Model(&VisitLog{}).Select("path, count(*) as count").Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Group("path").Order("count DESC").Limit(10).Scan(&topPaths)
+
+			// Top referers
+			type RefererCount struct {
+				Referer string
+				Count   int64
+			}
+			var topReferers []RefererCount
+			db.Model(&VisitLog{}).Select("referer, count(*) as count").Where("domain = ? AND created_at >= ? AND referer != ''", domain, startTime.Unix()).Group("referer").Order("count DESC").Limit(10).Scan(&topReferers)
+
+			c.JSON(http.StatusOK, gin.H{
+				"total_pv":      totalPV,
+				"total_uv":      totalUV,
+				"today_pv":      todayPV,
+				"today_uv":      todayUV,
+				"trend_labels":  trendLabels,
+				"trend_pv":      trendPV,
+				"trend_uv":      trendUV,
+				"top_paths":     topPaths,
+				"top_referers":  topReferers,
+			})
 		})
 	}
 
@@ -791,6 +1100,130 @@ func main() {
 			db.Select("id", "username", "nickname", "email").Order("id ASC").Find(&users)
 			c.JSON(http.StatusOK, users)
 		})
+
+		// ── 模板管理 ──
+		admin.GET("/templates", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var templates []Template
+			db.Order("id DESC").Find(&templates)
+			c.HTML(http.StatusOK, "admin-templates.html", gin.H{
+				"User":      user,
+				"Templates": templates,
+				"Page":      "templates",
+			})
+		})
+
+		admin.POST("/templates", func(c *gin.Context) {
+			name := c.PostForm("name")
+			desc := c.PostForm("desc")
+			content := c.PostForm("content")
+			if name == "" {
+				c.Redirect(http.StatusFound, "/admin/templates?error=模板名称不能为空")
+				return
+			}
+			t := Template{Name: name, Desc: desc, Content: content, Status: 1}
+			if err := db.Create(&t).Error; err != nil {
+				c.Redirect(http.StatusFound, "/admin/templates?error=模板名称已存在")
+				return
+			}
+			c.Redirect(http.StatusFound, "/admin/templates?success=1")
+		})
+
+		admin.POST("/templates/:id", func(c *gin.Context) {
+			var t Template
+			if db.First(&t, c.Param("id")).Error != nil {
+				c.Redirect(http.StatusFound, "/admin/templates?error=模板不存在")
+				return
+			}
+			name := c.PostForm("name")
+			desc := c.PostForm("desc")
+			content := c.PostForm("content")
+			statusStr := c.PostForm("status")
+			if name != "" {
+				t.Name = name
+			}
+			t.Desc = desc
+			t.Content = content
+			if statusStr != "" {
+				s, _ := strconv.Atoi(statusStr)
+				t.Status = s
+			}
+			db.Save(&t)
+			c.Redirect(http.StatusFound, "/admin/templates?success=1")
+		})
+
+		admin.POST("/templates/:id/delete", func(c *gin.Context) {
+			db.Delete(&Template{}, c.Param("id"))
+			c.Redirect(http.StatusFound, "/admin/templates?success=1")
+		})
+
+		// 模板预览（管理员端）
+		admin.GET("/templates/:id/preview", func(c *gin.Context) {
+			var t Template
+			if db.First(&t, c.Param("id")).Error != nil {
+				c.String(http.StatusNotFound, "模板不存在")
+				return
+			}
+			previewHTML := `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>模板预览</title>
+<style>@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',-apple-system,sans-serif;background:linear-gradient(135deg,#eef2ff,#e0e7ff,#f0f9ff,#ede9fe);min-height:100vh;display:flex;align-items:center;justify-content:center;color:#111827;-webkit-font-smoothing:antialiased}
+.wrap{text-align:center;padding:3rem;max-width:640px;background:rgba(255,255,255,0.6);backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.5);border-radius:2rem;box-shadow:0 8px 40px rgba(99,102,241,0.08)}
+h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;background:linear-gradient(135deg,#312e81,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.content{font-size:1.05rem;line-height:1.8;color:#6b7280}</style></head><body><div class="wrap">
+<h1>预览: ` + t.Name + `</h1>
+<div class="content">` + t.Content + `</div>
+<div style="margin-top:2rem;padding:0.3rem 1rem;background:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.5);border-radius:999px;font-size:0.8rem;color:#9ca3af;font-family:ui-monospace,monospace;display:inline-block">模板: ` + t.Name + `</div>
+</div></body></html>`
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(previewHTML))
+		})
+
+		// ── 站点设置 ──
+		admin.GET("/settings", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			settings := getAllSettings(db)
+			c.HTML(http.StatusOK, "admin-settings.html", gin.H{
+				"User":     user,
+				"Settings": settings,
+				"Success":  c.Query("success"),
+				"Error":    c.Query("error"),
+				"Page":     "settings",
+			})
+		})
+
+		admin.POST("/settings", func(c *gin.Context) {
+			keys := []string{"site_title", "footer_text", "bg_image", "stats_code"}
+			for _, key := range keys {
+				val := c.PostForm(key)
+				setSetting(db, key, val)
+			}
+			c.Redirect(http.StatusFound, "/admin/settings?success=设置已保存")
+		})
+
+		admin.POST("/settings/password", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			oldPwd := c.PostForm("old_password")
+			newPwd := c.PostForm("new_password")
+			confirmPwd := c.PostForm("confirm_password")
+			if oldPwd == "" || newPwd == "" {
+				c.Redirect(http.StatusFound, "/admin/settings?error=请填写所有字段")
+				return
+			}
+			if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(oldPwd)); err != nil {
+				c.Redirect(http.StatusFound, "/admin/settings?error=原密码错误")
+				return
+			}
+			if len(newPwd) < 6 {
+				c.Redirect(http.StatusFound, "/admin/settings?error=新密码至少6位")
+				return
+			}
+			if newPwd != confirmPwd {
+				c.Redirect(http.StatusFound, "/admin/settings?error=两次密码不一致")
+				return
+			}
+			hash, _ := bcrypt.GenerateFromPassword([]byte(newPwd), bcrypt.DefaultCost)
+			db.Model(user).Update("password", string(hash))
+			c.Redirect(http.StatusFound, "/admin/settings?success=密码已修改")
+		})
 	}
 
 	// ── 403 页面 ──
@@ -831,11 +1264,29 @@ func main() {
 			}
 			c.Redirect(http.StatusMovedPermanently, target)
 		case "page":
+			// Resolve template content
+			tmplContent := ""
+			if d.Template != "" && d.Template != "default" {
+				var tmpl Template
+				if db.Where("name = ? AND status = 1", d.Template).First(&tmpl).Error == nil {
+					tmplContent = tmpl.Content
+				}
+			}
+			settings := getAllSettings(db)
+			siteTitle := settings["site_title"]
+			if siteTitle == "" {
+				siteTitle = "DomainOS"
+			}
 			c.HTML(http.StatusOK, "site.html", gin.H{
-				"Domain":  d,
-				"Title":   d.Title,
-				"Content": d.Content,
-				"Host":    host,
+				"Domain":      d,
+				"Title":       d.Title,
+				"Content":     d.Content,
+				"Host":        host,
+				"TmplContent": tmplContent,
+				"SiteTitle":   siteTitle,
+				"FooterText":  settings["footer_text"],
+				"BgImage":     settings["bg_image"],
+				"StatsCode":   template.HTML(settings["stats_code"]),
 			})
 		default:
 			c.String(http.StatusBadRequest, "unknown mode")

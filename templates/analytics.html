@@ -1,0 +1,340 @@
+{{ define "analytics.html" }}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>统计分析 — DomainOS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#6366f1',primaryDark:'#4f46e5'}}}}</script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body{-webkit-font-smoothing:antialiased}
+    .glass-nav{background:rgba(255,255,255,0.72);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1px solid rgba(255,255,255,0.3)}
+    .glass-side{background:rgba(255,255,255,0.6);backdrop-filter:blur(24px) saturate(180%);-webkit-backdrop-filter:blur(24px) saturate(180%);border-right:1px solid rgba(255,255,255,0.4)}
+    .dash-bg{background:linear-gradient(160deg,#f0f2ff 0%,#f8f9fc 40%,#f5f3ff 70%,#eef2ff 100%)}
+    .card-glass{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .stat-card{background:rgba(255,255,255,0.65);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,0.5)}
+    .sidebar-item.active{background:rgba(99,102,241,0.08);color:#6366f1}
+    .sidebar-item:not(.active):hover{background:rgba(0,0,0,0.03);color:#111827}
+    .chart-container{position:relative;height:300px}
+    @media (max-width: 767px) {
+      .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.3);z-index:40}
+      .sidebar-overlay.open{display:block}
+      .glass-side{position:fixed;left:0;top:0;bottom:0;z-index:50;transform:translateX(-100%);transition:transform .25s ease}
+      .glass-side.open{transform:translateX(0)}
+    }
+  </style>
+</head>
+<body class="dash-bg text-gray-900 min-h-screen">
+
+  <nav class="glass-nav sticky top-0 z-50">
+    <div class="flex items-center justify-between h-14 px-4 md:px-6">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden p-2 -ml-2 rounded-lg hover:bg-white/50 transition">
+          <i data-lucide="menu" class="w-5 h-5 text-gray-600"></i>
+        </button>
+        <a href="/" class="flex items-center gap-2.5 text-gray-900 font-bold text-lg no-underline">
+          <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center shadow-md shadow-indigo-200">
+            <i data-lucide="globe" class="w-4 h-4 text-white"></i>
+          </div>
+          DomainOS
+        </a>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">控制台</a>
+        <a href="/" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">首页</a>
+        <a href="/logout" class="text-sm text-gray-400 hover:text-gray-600 transition px-2.5 py-1.5 rounded-lg hover:bg-white/50">退出</a>
+      </div>
+    </div>
+  </nav>
+
+  <div class="flex min-h-[calc(100vh-56px)]">
+    <div id="sidebarOverlay" onclick="toggleSidebar()" class="sidebar-overlay"></div>
+
+    <aside id="sidebar" class="glass-side w-56 flex-shrink-0 flex flex-col">
+      <div class="md:hidden flex items-center justify-between px-4 py-3 border-b border-white/30">
+        <span class="text-sm font-bold text-gray-700">菜单</span>
+        <button onclick="toggleSidebar()" class="p-1.5 rounded-lg hover:bg-white/50 transition">
+          <i data-lucide="x" class="w-5 h-5 text-gray-500"></i>
+        </button>
+      </div>
+      <div class="flex-1 py-5 px-3 space-y-5 overflow-y-auto">
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">概览</div>
+          <a href="/dashboard" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+            仪表盘
+          </a>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">管理</div>
+          <div class="space-y-0.5">
+            <a href="/dashboard" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="globe-2" class="w-4 h-4"></i>
+              我的域名
+            </a>
+            <a href="/templates" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="palette" class="w-4 h-4"></i>
+              模板中心
+            </a>
+            <a href="/analytics" class="sidebar-item active flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition">
+              <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+              统计分析
+            </a>
+            {{ if eq .User.Role "admin" }}
+            <a href="/admin" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-indigo-500 font-medium transition">
+              <i data-lucide="shield" class="w-4 h-4"></i>
+              管理后台
+            </a>
+            {{ end }}
+          </div>
+        </div>
+        <div>
+          <div class="px-3 mb-1.5 text-[10px] font-bold text-gray-300 uppercase tracking-widest">其他</div>
+          <div class="space-y-0.5">
+            <a href="/settings" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              个人设置
+            </a>
+            <a href="/" class="sidebar-item flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-gray-500 transition">
+              <i data-lucide="home" class="w-4 h-4"></i>
+              返回首页
+            </a>
+          </div>
+        </div>
+      </div>
+      <div class="border-t border-white/30 p-4 flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-md shadow-indigo-200">{{ slice .User.Nickname 0 1 }}</div>
+        <div class="min-w-0">
+          <div class="text-sm font-semibold truncate">{{ .User.Nickname }}</div>
+          <div class="text-xs text-gray-400 truncate">{{ .User.Email }}</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="flex-1 p-4 md:p-8 overflow-y-auto">
+      <div class="max-w-6xl">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h1 class="text-xl font-bold">统计分析</h1>
+            <p class="text-sm text-gray-400 mt-0.5">查看域名访问数据</p>
+          </div>
+          <div class="flex gap-2">
+            <select id="domainSelect" onchange="loadStats()" class="px-3 py-2 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none">
+              <option value="">选择域名</option>
+              {{ range .Domains }}
+              <option value="{{ .Hostname }}">{{ .Hostname }}</option>
+              {{ end }}
+            </select>
+            <select id="periodSelect" onchange="loadStats()" class="px-3 py-2 bg-white/60 border border-gray-200/80 rounded-xl text-sm outline-none">
+              <option value="7">最近 7 天</option>
+              <option value="30">最近 30 天</option>
+              <option value="90">最近 90 天</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+                <i data-lucide="eye" class="w-4 h-4 text-indigo-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">总 PV</span>
+            </div>
+            <div class="text-3xl font-extrabold text-indigo-600" id="totalPV">—</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center">
+                <i data-lucide="users" class="w-4 h-4 text-violet-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">独立 IP</span>
+            </div>
+            <div class="text-3xl font-extrabold text-violet-600" id="totalUV">—</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">今日 PV</span>
+            </div>
+            <div class="text-3xl font-extrabold text-emerald-600" id="todayPV">—</div>
+          </div>
+          <div class="stat-card rounded-2xl p-5">
+            <div class="flex items-center gap-2 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+                <i data-lucide="activity" class="w-4 h-4 text-amber-500"></i>
+              </div>
+              <span class="text-xs font-semibold text-gray-400">今日 UV</span>
+            </div>
+            <div class="text-3xl font-extrabold text-amber-600" id="todayUV">—</div>
+          </div>
+        </div>
+
+        <!-- Trend Chart -->
+        <div class="card-glass rounded-2xl overflow-hidden mb-6">
+          <div class="flex items-center gap-2 px-6 py-4 border-b border-white/30">
+            <div class="w-7 h-7 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <i data-lucide="line-chart" class="w-3.5 h-3.5 text-indigo-500"></i>
+            </div>
+            <h3 class="text-sm font-bold">访问趋势</h3>
+          </div>
+          <div class="p-6">
+            <div class="chart-container">
+              <canvas id="trendChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Top Paths -->
+          <div class="card-glass rounded-2xl overflow-hidden">
+            <div class="flex items-center gap-2 px-6 py-4 border-b border-white/30">
+              <div class="w-7 h-7 rounded-lg bg-violet-100 flex items-center justify-center">
+                <i data-lucide="link" class="w-3.5 h-3.5 text-violet-500"></i>
+              </div>
+              <h3 class="text-sm font-bold">热门路径</h3>
+            </div>
+            <div class="p-4" id="topPaths">
+              <div class="py-8 text-center text-sm text-gray-300">选择域名查看数据</div>
+            </div>
+          </div>
+
+          <!-- Top Referers -->
+          <div class="card-glass rounded-2xl overflow-hidden">
+            <div class="flex items-center gap-2 px-6 py-4 border-b border-white/30">
+              <div class="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <i data-lucide="external-link" class="w-3.5 h-3.5 text-emerald-500"></i>
+              </div>
+              <h3 class="text-sm font-bold">来源分析</h3>
+            </div>
+            <div class="p-4" id="topReferers">
+              <div class="py-8 text-center text-sm text-gray-300">选择域名查看数据</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    lucide.createIcons();
+    function toggleSidebar(){
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('sidebarOverlay').classList.toggle('open');
+    }
+
+    var trendChart = null;
+
+    function loadStats() {
+      var domain = document.getElementById('domainSelect').value;
+      var period = document.getElementById('periodSelect').value;
+      if (!domain) {
+        document.getElementById('totalPV').textContent = '—';
+        document.getElementById('totalUV').textContent = '—';
+        document.getElementById('todayPV').textContent = '—';
+        document.getElementById('todayUV').textContent = '—';
+        document.getElementById('topPaths').innerHTML = '<div class="py-8 text-center text-sm text-gray-300">选择域名查看数据</div>';
+        document.getElementById('topReferers').innerHTML = '<div class="py-8 text-center text-sm text-gray-300">选择域名查看数据</div>';
+        if (trendChart) { trendChart.destroy(); trendChart = null; }
+        return;
+      }
+
+      fetch('/api/analytics/stats?domain=' + encodeURIComponent(domain) + '&days=' + period)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          // Update stat cards
+          document.getElementById('totalPV').textContent = data.total_pv || 0;
+          document.getElementById('totalUV').textContent = data.total_uv || 0;
+          document.getElementById('todayPV').textContent = data.today_pv || 0;
+          document.getElementById('todayUV').textContent = data.today_uv || 0;
+
+          // Trend chart
+          if (trendChart) trendChart.destroy();
+          var ctx = document.getElementById('trendChart').getContext('2d');
+          trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: data.trend_labels || [],
+              datasets: [{
+                label: 'PV',
+                data: data.trend_pv || [],
+                borderColor: '#6366f1',
+                backgroundColor: 'rgba(99,102,241,0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#6366f1'
+              }, {
+                label: 'UV',
+                data: data.trend_uv || [],
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139,92,246,0.08)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointBackgroundColor: '#8b5cf6'
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, padding: 20 } }
+              },
+              scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.04)' } },
+                x: { grid: { display: false } }
+              }
+            }
+          });
+
+          // Top paths
+          var pathsHtml = '';
+          if (data.top_paths && data.top_paths.length > 0) {
+            data.top_paths.forEach(function(p, i) {
+              var pct = data.total_pv > 0 ? Math.round(p.count / data.total_pv * 100) : 0;
+              pathsHtml += '<div class="flex items-center gap-3 py-2' + (i > 0 ? ' border-t border-white/20' : '') + '">';
+              pathsHtml += '<span class="text-xs text-gray-300 w-5">' + (i+1) + '</span>';
+              pathsHtml += '<div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">' + p.path + '</div></div>';
+              pathsHtml += '<div class="flex items-center gap-2"><div class="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-indigo-500 rounded-full" style="width:' + pct + '%"></div></div>';
+              pathsHtml += '<span class="text-xs text-gray-400 w-10 text-right">' + p.count + '</span></div></div>';
+            });
+          } else {
+            pathsHtml = '<div class="py-8 text-center text-sm text-gray-300">暂无数据</div>';
+          }
+          document.getElementById('topPaths').innerHTML = pathsHtml;
+
+          // Top referers
+          var refHtml = '';
+          if (data.top_referers && data.top_referers.length > 0) {
+            data.top_referers.forEach(function(r, i) {
+              var pct = data.total_pv > 0 ? Math.round(r.count / data.total_pv * 100) : 0;
+              var label = r.referer || '直接访问';
+              refHtml += '<div class="flex items-center gap-3 py-2' + (i > 0 ? ' border-t border-white/20' : '') + '">';
+              refHtml += '<span class="text-xs text-gray-300 w-5">' + (i+1) + '</span>';
+              refHtml += '<div class="flex-1 min-w-0"><div class="text-sm font-medium truncate">' + label + '</div></div>';
+              refHtml += '<div class="flex items-center gap-2"><div class="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-emerald-500 rounded-full" style="width:' + pct + '%"></div></div>';
+              refHtml += '<span class="text-xs text-gray-400 w-10 text-right">' + r.count + '</span></div></div>';
+            });
+          } else {
+            refHtml = '<div class="py-8 text-center text-sm text-gray-300">暂无数据</div>';
+          }
+          document.getElementById('topReferers').innerHTML = refHtml;
+        })
+        .catch(function(err) {
+          console.error('Failed to load stats:', err);
+        });
+    }
+  </script>
+</body>
+</html>
+{{ end }}
