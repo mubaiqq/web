@@ -1,8 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"math"
 	"net/http"
@@ -10,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -32,17 +36,21 @@ type User struct {
 }
 
 type Domain struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	UserID    uint      `json:"user_id" gorm:"index"`
-	Hostname  string    `json:"hostname" gorm:"uniqueIndex;size:255;not null"`
-	Mode      string    `json:"mode" gorm:"size:20;not null;default:page"`
-	Target    string    `json:"target" gorm:"size:512"`
-	Template  string    `json:"template" gorm:"size:100"`
-	Title     string    `json:"title" gorm:"size:255"`
-	Content   string    `json:"content" gorm:"type:text"`
-	Status    int       `json:"status" gorm:"default:1"` // 1=active 0=disabled
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           uint      `json:"id" gorm:"primaryKey"`
+	UserID       uint      `json:"user_id" gorm:"index"`
+	Hostname     string    `json:"hostname" gorm:"uniqueIndex;size:255;not null"`
+	Mode         string    `json:"mode" gorm:"size:20;not null;default:page"`
+	RedirectType string    `json:"redirect_type" gorm:"size:10;default:301"` // 301|302|meta
+	Target       string    `json:"target" gorm:"size:512"`
+	Template     string    `json:"template" gorm:"size:100"`
+	Title        string    `json:"title" gorm:"size:255"`
+	Content      string    `json:"content" gorm:"type:text"`
+	CustomCSS    string    `json:"custom_css" gorm:"type:text"`
+	CustomJS     string    `json:"custom_js" gorm:"type:text"`
+	ExpiresAt    int64     `json:"expires_at" gorm:"default:0"` // 0=永久
+	Status       int       `json:"status" gorm:"default:1"`     // 1=active 0=disabled
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type VisitLog struct {
@@ -71,6 +79,50 @@ type SiteSetting struct {
 	Value string `gorm:"type:text"`
 }
 
+// Phase 4: 域名增加跳转类型和到期时间
+// (通过 AutoMigrate ALTER TABLE 添加新列)
+
+type UploadFile struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"index"`
+	Filename  string    `json:"filename" gorm:"size:255;not null"`
+	OrigName  string    `json:"orig_name" gorm:"size:255"`
+	Size      int64     `json:"size"`
+	MimeType  string    `json:"mime_type" gorm:"size:100"`
+	Path      string    `json:"path" gorm:"size:512"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type APIKey struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"index"`
+	Name      string    `json:"name" gorm:"size:100;not null"`
+	Key       string    `json:"key" gorm:"uniqueIndex;size:64;not null"`
+	Status    int       `json:"status" gorm:"default:1"`
+	CreatedAt time.Time `json:"created_at"`
+	LastUsed  time.Time `json:"last_used"`
+}
+
+type Notification struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"index"`
+	Title     string    `json:"title" gorm:"size:255;not null"`
+	Content   string    `json:"content" gorm:"type:text"`
+	Type      string    `json:"type" gorm:"size:20;default:info"` // info|warning|success
+	Read      int       `json:"read" gorm:"default:0"`           // 0=unread 1=read
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type OperationLog struct {
+	ID        uint      `json:"id" gorm:"primaryKey"`
+	UserID    uint      `json:"user_id" gorm:"index"`
+	Action    string    `json:"action" gorm:"size:100;not null"`
+	Target    string    `json:"target" gorm:"size:255"`
+	Detail    string    `json:"detail" gorm:"type:text"`
+	IP        string    `json:"ip" gorm:"size:64"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // ── DB Init ──
 
 func initDB(path string) *gorm.DB {
@@ -79,7 +131,15 @@ func initDB(path string) *gorm.DB {
 	if err != nil {
 		log.Fatalf("db init: %v", err)
 	}
-	db.AutoMigrate(&User{}, &Domain{}, &VisitLog{}, &Template{}, &SiteSetting{})
+	db.AutoMigrate(&User{}, &Domain{}, &VisitLog{}, &Template{}, &SiteSetting{},
+		&UploadFile{}, &APIKey{}, &Notification{}, &OperationLog{})
+
+	// Phase 4: Domain 新字段 (ALTER TABLE 兼容旧数据)
+	sqlDB, _ := db.DB()
+	sqlDB.Exec("ALTER TABLE domains ADD COLUMN redirect_type TEXT DEFAULT '301'")
+	sqlDB.Exec("ALTER TABLE domains ADD COLUMN expires_at INTEGER DEFAULT 0")
+	sqlDB.Exec("ALTER TABLE domains ADD COLUMN custom_css TEXT DEFAULT ''")
+	sqlDB.Exec("ALTER TABLE domains ADD COLUMN custom_js TEXT DEFAULT ''")
 
 	sqlDB, _ := db.DB()
 	sqlDB.Exec("PRAGMA journal_mode=WAL")
@@ -177,6 +237,123 @@ func setSetting(db *gorm.DB, key, value string) {
 	}
 }
 
+// ── In-Memory Domain Cache (Phase 5) ──
+
+var domainCache sync.Map // hostname -> Domain
+
+func cacheGetDomain(hostname string) (*Domain, bool) {
+	if v, ok := domainCache.Load(hostname); ok {
+		d := v.(Domain)
+		return &d, true
+	}
+	return nil, false
+}
+
+func cacheSetDomain(d Domain) {
+	domainCache.Store(d.Hostname, d)
+}
+
+func cacheDeleteDomain(hostname string) {
+	domainCache.Delete(hostname)
+}
+
+func warmDomainCache(db *gorm.DB) {
+	var domains []Domain
+	db.Where("status = ?", 1).Find(&domains)
+	for _, d := range domains {
+		domainCache.Store(d.Hostname, d)
+	}
+	log.Printf("📦 缓存预热: %d 个域名", len(domains))
+}
+
+// ── Rate Limiting (Phase 5) ──
+
+var rateLimitMap sync.Map // ip -> []timestamp
+
+func rateLimit(maxRequests int, window time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		now := time.Now()
+		key := ip
+
+		val, _ := rateLimitMap.LoadOrStore(key, &[]time.Time{})
+		times := val.(*[]time.Time)
+
+		// Clean old entries
+		var valid []time.Time
+		for _, t := range *times {
+			if now.Sub(t) < window {
+				valid = append(valid, t)
+			}
+		}
+
+		if len(valid) >= maxRequests {
+			c.HTML(http.StatusTooManyRequests, "429.html", gin.H{"Message": "请求过于频繁，请稍后再试"})
+			c.Abort()
+			return
+		}
+
+		*times = append(valid, now)
+		rateLimitMap.Store(key, times)
+		c.Next()
+	}
+}
+
+// ── Operation Log (Phase 5) ──
+
+func logOperation(db *gorm.DB, userID uint, action, target, detail, ip string) {
+	db.Create(&OperationLog{
+		UserID: userID,
+		Action: action,
+		Target: target,
+		Detail: detail,
+		IP:     ip,
+	})
+}
+
+// ── API Key helpers (Phase 6) ──
+
+func generateAPIKey() string {
+	b := make([]byte, 32)
+	rand.Read(b)
+	return "dk_" + hex.EncodeToString(b)
+}
+
+func requireAPIKey(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		key := c.GetHeader("X-API-Key")
+		if key == "" {
+			key = c.Query("api_key")
+		}
+		if key == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "缺少 API Key"})
+			c.Abort()
+			return
+		}
+		var ak APIKey
+		if err := db.Where("key = ? AND status = 1", key).First(&ak).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "API Key 无效"})
+			c.Abort()
+			return
+		}
+		db.Model(&ak).Update("last_used", time.Now())
+		c.Set("api_user_id", ak.UserID)
+		c.Set("api_key_id", ak.ID)
+		c.Next()
+	}
+}
+
+// ── Notification helper ──
+
+func createNotification(db *gorm.DB, userID uint, title, content, ntype string) {
+	db.Create(&Notification{
+		UserID:  userID,
+		Title:   title,
+		Content: content,
+		Type:    ntype,
+	})
+}
+
 // ── Session helpers ──
 
 func currentUser(c *gin.Context, db *gorm.DB) *User {
@@ -249,10 +426,17 @@ func seedAdmin(db *gorm.DB) {
 func main() {
 	db := initDB("./data/platform.db")
 	seedAdmin(db)
+	warmDomainCache(db)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+
+	// Rate limiting: 全局 60 req/min, 登录/注册 10 req/min
+	r.Use(rateLimit(60, time.Minute))
+
+	// 创建上传目录
+	os.MkdirAll("./uploads", 0755)
 
 	// 加载模板
 	tmpl := template.Must(
@@ -418,6 +602,7 @@ func main() {
 			user := c.MustGet("user").(*User)
 			hostname := c.PostForm("hostname")
 			mode := c.PostForm("mode")
+			redirectType := c.DefaultPostForm("redirect_type", "301")
 			target := c.PostForm("target")
 			title := c.PostForm("title")
 
@@ -427,17 +612,19 @@ func main() {
 			}
 
 			d := Domain{
-				UserID:   user.ID,
-				Hostname: hostname,
-				Mode:     mode,
-				Target:   target,
-				Title:    title,
-				Template: "default",
+				UserID:       user.ID,
+				Hostname:     hostname,
+				Mode:         mode,
+				RedirectType: redirectType,
+				Target:       target,
+				Title:        title,
+				Template:     "default",
 			}
 			if err := db.Create(&d).Error; err != nil {
 				c.Redirect(http.StatusFound, "/dashboard?error=域名已存在")
 				return
 			}
+			cacheSetDomain(d)
 			c.Redirect(http.StatusFound, "/dashboard")
 		})
 
@@ -457,6 +644,9 @@ func main() {
 			title := c.PostForm("title")
 			content := c.PostForm("content")
 			tmpl := c.PostForm("template")
+			redirectType := c.PostForm("redirect_type")
+			customCSS := c.PostForm("custom_css")
+			customJS := c.PostForm("custom_js")
 			if title != "" {
 				d.Title = title
 			}
@@ -464,7 +654,16 @@ func main() {
 			if tmpl != "" {
 				d.Template = tmpl
 			}
+			if redirectType != "" {
+				d.RedirectType = redirectType
+			}
+			d.CustomCSS = customCSS
+			d.CustomJS = customJS
 			db.Save(&d)
+			cacheDeleteDomain(d.Hostname)
+			if d.Status == 1 {
+				cacheSetDomain(d)
+			}
 			c.Redirect(http.StatusFound, "/dashboard")
 		})
 
@@ -616,23 +815,18 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 			startTime := startOfDay.AddDate(0, 0, -days+1)
 
-			// Total PV
 			var totalPV int64
 			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Count(&totalPV)
 
-			// Total UV (distinct IPs)
 			var totalUV int64
 			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Distinct("ip").Count(&totalUV)
 
-			// Today PV
 			var todayPV int64
 			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startOfDay.Unix()).Count(&todayPV)
 
-			// Today UV
 			var todayUV int64
 			db.Model(&VisitLog{}).Where("domain = ? AND created_at >= ?", domain, startOfDay.Unix()).Distinct("ip").Count(&todayUV)
 
-			// Daily trend
 			type DayStat struct {
 				Date string
 				PV   int64
@@ -658,7 +852,6 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 				trendUV = append(trendUV, t.UV)
 			}
 
-			// Top paths
 			type PathCount struct {
 				Path  string
 				Count int64
@@ -666,7 +859,6 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			var topPaths []PathCount
 			db.Model(&VisitLog{}).Select("path, count(*) as count").Where("domain = ? AND created_at >= ?", domain, startTime.Unix()).Group("path").Order("count DESC").Limit(10).Scan(&topPaths)
 
-			// Top referers
 			type RefererCount struct {
 				Referer string
 				Count   int64
@@ -675,16 +867,163 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			db.Model(&VisitLog{}).Select("referer, count(*) as count").Where("domain = ? AND created_at >= ? AND referer != ''", domain, startTime.Unix()).Group("referer").Order("count DESC").Limit(10).Scan(&topReferers)
 
 			c.JSON(http.StatusOK, gin.H{
-				"total_pv":      totalPV,
-				"total_uv":      totalUV,
-				"today_pv":      todayPV,
-				"today_uv":      todayUV,
-				"trend_labels":  trendLabels,
-				"trend_pv":      trendPV,
-				"trend_uv":      trendUV,
-				"top_paths":     topPaths,
-				"top_referers":  topReferers,
+				"total_pv":     totalPV,
+				"total_uv":     totalUV,
+				"today_pv":     todayPV,
+				"today_uv":     todayUV,
+				"trend_labels": trendLabels,
+				"trend_pv":     trendPV,
+				"trend_uv":     trendUV,
+				"top_paths":    topPaths,
+				"top_referers": topReferers,
 			})
+		})
+
+		// ── Phase 4: 文件上传 ──
+		auth.POST("/upload", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			file, header, err := c.Request.FormFile("file")
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "请选择文件"})
+				return
+			}
+			defer file.Close()
+
+			// 限制 10MB
+			if header.Size > 10*1024*1024 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "文件大小不能超过 10MB"})
+				return
+			}
+
+			// 生成唯一文件名
+			ext := filepath.Ext(header.Filename)
+			b := make([]byte, 16)
+			rand.Read(b)
+			newName := hex.EncodeToString(b) + ext
+			savePath := filepath.Join("./uploads", newName)
+
+			out, err := os.Create(savePath)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "保存失败"})
+				return
+			}
+			defer out.Close()
+			io.Copy(out, file)
+
+			uf := UploadFile{
+				UserID:   user.ID,
+				Filename: newName,
+				OrigName: header.Filename,
+				Size:     header.Size,
+				MimeType: header.Header.Get("Content-Type"),
+				Path:     "/uploads/" + newName,
+			}
+			db.Create(&uf)
+
+			c.JSON(http.StatusOK, gin.H{
+				"url":      "/uploads/" + newName,
+				"filename": header.Filename,
+				"id":       uf.ID,
+			})
+		})
+
+		// 文件管理页
+		auth.GET("/files", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var files []UploadFile
+			db.Where("user_id = ?", user.ID).Order("id DESC").Find(&files)
+			c.HTML(http.StatusOK, "user-files.html", gin.H{
+				"User":  user,
+				"Files": files,
+			})
+		})
+
+		// 删除文件
+		auth.POST("/files/:id/delete", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var f UploadFile
+			if err := db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).First(&f).Error; err != nil {
+				c.Redirect(http.StatusFound, "/files?error=文件不存在")
+				return
+			}
+			os.Remove("." + f.Path)
+			db.Delete(&f)
+			c.Redirect(http.StatusFound, "/files")
+		})
+
+		// ── Phase 6: 通知系统 ──
+		auth.GET("/notifications", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var notifs []Notification
+			db.Where("user_id = ?", user.ID).Order("id DESC").Limit(50).Find(&notifs)
+			var unreadCount int64
+			db.Model(&Notification{}).Where("user_id = ? AND `read` = 0", user.ID).Count(&unreadCount)
+			c.HTML(http.StatusOK, "notifications.html", gin.H{
+				"User":        user,
+				"Notifications": notifs,
+				"UnreadCount": unreadCount,
+			})
+		})
+
+		auth.POST("/notifications/:id/read", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			db.Model(&Notification{}).Where("id = ? AND user_id = ?", c.Param("id"), user.ID).Update("read", 1)
+			c.Redirect(http.StatusFound, "/notifications")
+		})
+
+		auth.POST("/notifications/read-all", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			db.Model(&Notification{}).Where("user_id = ? AND `read` = 0", user.ID).Update("read", 1)
+			c.Redirect(http.StatusFound, "/notifications")
+		})
+
+		// ── Phase 6: API Key 管理 ──
+		auth.GET("/api-keys", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var keys []APIKey
+			db.Where("user_id = ?", user.ID).Order("id DESC").Find(&keys)
+			c.HTML(http.StatusOK, "api-keys.html", gin.H{
+				"User": user,
+				"Keys": keys,
+			})
+		})
+
+		auth.POST("/api-keys", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			name := c.PostForm("name")
+			if name == "" {
+				name = "Default"
+			}
+			ak := APIKey{
+				UserID: user.ID,
+				Name:   name,
+				Key:    generateAPIKey(),
+				Status: 1,
+			}
+			db.Create(&ak)
+			c.Redirect(http.StatusFound, "/api-keys")
+		})
+
+		auth.POST("/api-keys/:id/delete", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).Delete(&APIKey{})
+			c.Redirect(http.StatusFound, "/api-keys")
+		})
+
+		auth.POST("/api-keys/:id/toggle", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			var ak APIKey
+			if db.Where("id = ? AND user_id = ?", c.Param("id"), user.ID).First(&ak).Error != nil {
+				c.Redirect(http.StatusFound, "/api-keys?error=Key不存在")
+				return
+			}
+			if ak.Status == 1 {
+				ak.Status = 0
+			} else {
+				ak.Status = 1
+			}
+			db.Save(&ak)
+			c.Redirect(http.StatusFound, "/api-keys")
 		})
 	}
 
@@ -819,6 +1158,7 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 		admin.POST("/domains", func(c *gin.Context) {
 			hostname := c.PostForm("hostname")
 			mode := c.DefaultPostForm("mode", "page")
+			redirectType := c.DefaultPostForm("redirect_type", "301")
 			target := c.PostForm("target")
 			title := c.PostForm("title")
 			userIDStr := c.PostForm("user_id")
@@ -835,17 +1175,20 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			}
 
 			d := Domain{
-				UserID:   uint(userID),
-				Hostname: hostname,
-				Mode:     mode,
-				Target:   target,
-				Title:    title,
-				Template: "default",
+				UserID:       uint(userID),
+				Hostname:     hostname,
+				Mode:         mode,
+				RedirectType: redirectType,
+				Target:       target,
+				Title:        title,
+				Template:     "default",
 			}
 			if err := db.Create(&d).Error; err != nil {
 				c.Redirect(http.StatusFound, "/admin/domains?error=域名已存在")
 				return
 			}
+			cacheSetDomain(d)
+			logOperation(db, c.MustGet("user").(*User).ID, "create_domain", hostname, "", c.ClientIP())
 			c.Redirect(http.StatusFound, "/admin/domains?success=1")
 		})
 
@@ -894,19 +1237,28 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 
 			hostname := c.PostForm("hostname")
 			mode := c.PostForm("mode")
+			redirectType := c.PostForm("redirect_type")
 			target := c.PostForm("target")
 			title := c.PostForm("title")
+			customCSS := c.PostForm("custom_css")
+			customJS := c.PostForm("custom_js")
 			userIDStr := c.PostForm("user_id")
 			statusStr := c.PostForm("status")
 
+			oldHostname := d.Hostname
 			if hostname != "" {
 				d.Hostname = hostname
 			}
 			if mode != "" {
 				d.Mode = mode
 			}
+			if redirectType != "" {
+				d.RedirectType = redirectType
+			}
 			d.Target = target
 			d.Title = title
+			d.CustomCSS = customCSS
+			d.CustomJS = customJS
 			if userIDStr != "" {
 				uid, _ := strconv.ParseUint(userIDStr, 10, 64)
 				d.UserID = uint(uid)
@@ -917,6 +1269,12 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			}
 
 			db.Save(&d)
+			// Update cache
+			cacheDeleteDomain(oldHostname)
+			if d.Status == 1 {
+				cacheSetDomain(d)
+			}
+			logOperation(db, c.MustGet("user").(*User).ID, "edit_domain", d.Hostname, "", c.ClientIP())
 			c.Redirect(http.StatusFound, "/admin/domains?success=1")
 		})
 
@@ -1224,12 +1582,156 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			db.Model(user).Update("password", string(hash))
 			c.Redirect(http.StatusFound, "/admin/settings?success=密码已修改")
 		})
+
+		// ── Phase 5: 操作日志 ──
+		admin.GET("/logs", func(c *gin.Context) {
+			user := c.MustGet("user").(*User)
+			page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+			if page < 1 {
+				page = 1
+			}
+			pageSize := 50
+			var total int64
+			db.Model(&OperationLog{}).Count(&total)
+			totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
+			if totalPages < 1 {
+				totalPages = 1
+			}
+			var logs []OperationLog
+			db.Order("id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs)
+			c.HTML(http.StatusOK, "admin-logs.html", gin.H{
+				"User":       user,
+				"Logs":       logs,
+				"Page":       page,
+				"TotalPages": totalPages,
+				"Total":      total,
+				"PageName":   "logs",
+			})
+		})
+
+		// ── Phase 6: 管理员发送通知 ──
+		admin.POST("/notify", func(c *gin.Context) {
+			userIDStr := c.PostForm("user_id")
+			title := c.PostForm("title")
+			content := c.PostForm("content")
+			ntype := c.DefaultPostForm("type", "info")
+			if title == "" || content == "" {
+				c.Redirect(http.StatusFound, "/admin/users?error=标题和内容不能为空")
+				return
+			}
+			if userIDStr == "all" {
+				// Send to all users
+				var users []User
+				db.Find(&users)
+				for _, u := range users {
+					createNotification(db, u.ID, title, content, ntype)
+				}
+				c.Redirect(http.StatusFound, fmt.Sprintf("/admin/users?success=已通知 %d 个用户", len(users)))
+			} else {
+				uid, _ := strconv.ParseUint(userIDStr, 10, 64)
+				if uid == 0 {
+					c.Redirect(http.StatusFound, "/admin/users?error=无效用户ID")
+					return
+				}
+				createNotification(db, uint(uid), title, content, ntype)
+				c.Redirect(http.StatusFound, "/admin/users?success=通知已发送")
+			}
+		})
 	}
 
 	// ── 403 页面 ──
 	r.GET("/403", func(c *gin.Context) {
 		c.HTML(http.StatusForbidden, "403.html", gin.H{"Message": "权限不足"})
 	})
+
+	// ── 429 页面 ──
+	r.GET("/429", func(c *gin.Context) {
+		c.HTML(http.StatusTooManyRequests, "429.html", gin.H{"Message": "请求过于频繁"})
+	})
+
+	// ── 静态文件上传目录 ──
+	r.Static("/uploads", "./uploads")
+
+	// ── Phase 6: RESTful API ──
+	api := r.Group("/api/v1", requireAPIKey(db))
+	{
+		// 域名列表
+		api.GET("/domains", func(c *gin.Context) {
+			uid, _ := c.Get("api_user_id")
+			var domains []Domain
+			db.Where("user_id = ?", uid).Find(&domains)
+			c.JSON(http.StatusOK, gin.H{"domains": domains})
+		})
+
+		// 添加域名
+		api.POST("/domains", func(c *gin.Context) {
+			uid, _ := c.Get("api_user_id")
+			var req struct {
+				Hostname     string `json:"hostname" binding:"required"`
+				Mode         string `json:"mode"`
+				RedirectType string `json:"redirect_type"`
+				Target       string `json:"target"`
+				Title        string `json:"title"`
+				Content      string `json:"content"`
+			}
+			if err := c.ShouldBindJSON(&req); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			if req.Mode == "" {
+				req.Mode = "page"
+			}
+			if req.RedirectType == "" {
+				req.RedirectType = "301"
+			}
+			d := Domain{
+				UserID:       uid.(uint),
+				Hostname:     req.Hostname,
+				Mode:         req.Mode,
+				RedirectType: req.RedirectType,
+				Target:       req.Target,
+				Title:        req.Title,
+				Content:      req.Content,
+				Template:     "default",
+			}
+			if err := db.Create(&d).Error; err != nil {
+				c.JSON(http.StatusConflict, gin.H{"error": "域名已存在"})
+				return
+			}
+			cacheSetDomain(d)
+			logOperation(db, uid.(uint), "api_create_domain", req.Hostname, "", c.ClientIP())
+			c.JSON(http.StatusCreated, gin.H{"domain": d})
+		})
+
+		// 删除域名
+		api.DELETE("/domains/:id", func(c *gin.Context) {
+			uid, _ := c.Get("api_user_id")
+			var d Domain
+			if err := db.Where("id = ? AND user_id = ?", c.Param("id"), uid).First(&d).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "域名不存在"})
+				return
+			}
+			cacheDeleteDomain(d.Hostname)
+			db.Delete(&d)
+			logOperation(db, uid.(uint), "api_delete_domain", d.Hostname, "", c.ClientIP())
+			c.JSON(http.StatusOK, gin.H{"message": "已删除"})
+		})
+
+		// 域名统计
+		api.GET("/domains/:id/stats", func(c *gin.Context) {
+			uid, _ := c.Get("api_user_id")
+			var d Domain
+			if err := db.Where("id = ? AND user_id = ?", c.Param("id"), uid).First(&d).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "域名不存在"})
+				return
+			}
+			var totalPV int64
+			db.Model(&VisitLog{}).Where("domain = ?", d.Hostname).Count(&totalPV)
+			var totalUV int64
+			db.Model(&VisitLog{}).Where("domain = ?", d.Hostname).Distinct("ip").Count(&totalUV)
+			c.JSON(http.StatusOK, gin.H{"hostname": d.Hostname, "pv": totalPV, "uv": totalUV})
+		})
+	}
 
 	// ── 域名解析路由 ──
 	r.NoRoute(func(c *gin.Context) {
@@ -1238,13 +1740,27 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			host = host[:idx]
 		}
 
-		var d Domain
-		if err := db.Where("hostname = ? AND status = 1", host).First(&d).Error; err != nil {
-			c.HTML(http.StatusNotFound, "404.html", gin.H{"Host": host})
+		// Phase 5: 优先从缓存读取
+		var d *Domain
+		if cached, ok := cacheGetDomain(host); ok {
+			d = cached
+		} else {
+			var domain Domain
+			if err := db.Where("hostname = ? AND status = 1", host).First(&domain).Error; err != nil {
+				c.HTML(http.StatusNotFound, "404.html", gin.H{"Host": host})
+				return
+			}
+			d = &domain
+			cacheSetDomain(domain)
+		}
+
+		// 检查域名是否过期
+		if d.ExpiresAt > 0 && time.Now().Unix() > d.ExpiresAt {
+			c.HTML(http.StatusGone, "404.html", gin.H{"Host": host, "Message": "域名已过期"})
 			return
 		}
 
-		// 记录访问（异步）
+		// 记录访问（异步，使用缓存域名）
 		go func() {
 			db.Create(&VisitLog{
 				Domain:  host,
@@ -1262,7 +1778,16 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 			if !strings.HasPrefix(target, "http") {
 				target = "https://" + target
 			}
-			c.Redirect(http.StatusMovedPermanently, target)
+			// Phase 4: 支持 301/302/meta 跳转
+			switch d.RedirectType {
+			case "302":
+				c.Redirect(http.StatusFound, target)
+			case "meta":
+				metaHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>跳转中...</title><meta http-equiv="refresh" content="0;url=%s"></head><body><p>正在跳转到 <a href="%s">%s</a></p></body></html>`, target, target, target)
+				c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(metaHTML))
+			default: // 301
+				c.Redirect(http.StatusMovedPermanently, target)
+			}
 		case "page":
 			// Resolve template content
 			tmplContent := ""
@@ -1287,6 +1812,8 @@ h1{font-size:2.5rem;font-weight:800;letter-spacing:-0.5px;margin-bottom:1.2rem;b
 				"FooterText":  settings["footer_text"],
 				"BgImage":     settings["bg_image"],
 				"StatsCode":   template.HTML(settings["stats_code"]),
+				"CustomCSS":   d.CustomCSS,
+				"CustomJS":    d.CustomJS,
 			})
 		default:
 			c.String(http.StatusBadRequest, "unknown mode")
